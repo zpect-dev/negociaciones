@@ -212,6 +212,12 @@ export function CreateNegotiationSheet({
         }
     };
 
+    const isFormValid =
+        !!companyData &&
+        !!selectedVendedor &&
+        !!negotiationType.trim() &&
+        !!pdfFile;
+
     return (
         <Sheet open={open} onOpenChange={handleOpenChange}>
             <SheetTrigger asChild>
@@ -440,7 +446,7 @@ export function CreateNegotiationSheet({
                             type="submit"
                             onClick={handleSubmit}
                             className="w-full sm:w-auto"
-                            disabled={loading}
+                            disabled={loading || !isFormValid}
                         >
                             {loading && (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
