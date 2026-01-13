@@ -30,7 +30,7 @@ import {
     Search,
     XCircle,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CreateNegotiationSheet } from './create-negotiation-sheet';
 
 export interface NegotiationRecord {
@@ -55,6 +55,7 @@ export interface NegotiationRecord {
     notesCount?: number;
     pdfUrl?: string; // Optional because not all have PDF
     supervisorObservation?: string;
+    notaEntrega?: string;
 }
 
 export default function DashboardTable({
@@ -68,10 +69,23 @@ export default function DashboardTable({
     isAdmin?: boolean;
     filters?: Record<string, string | null | undefined>;
 }) {
+    const [negotiations, setNegotiations] = useState<NegotiationRecord[]>(data);
+
+    useEffect(() => {
+        setNegotiations(data);
+    }, [data]);
+
     const [isObservationModalOpen, setIsObservationModalOpen] = useState(false);
     const [selectedNegotiation, setSelectedNegotiation] =
         useState<NegotiationRecord | null>(null);
     const [observationText, setObservationText] = useState('');
+
+    // Nota de Entrega Modal State
+    const [isNotaEntregaModalOpen, setIsNotaEntregaModalOpen] = useState(false);
+    const [notaEntregaValue, setNotaEntregaValue] = useState('');
+    const [pendingEffectivenessId, setPendingEffectivenessId] = useState<
+        number | null
+    >(null);
 
     // Filter states
     const [search, setSearch] = useState(filters?.search || '');
@@ -166,8 +180,21 @@ export default function DashboardTable({
                 observacion_supervisor: observationText,
             });
 
-            // Reload to show changes
-            window.location.reload();
+            // Update local state
+            setNegotiations((prev) =>
+                prev.map((item) =>
+                    item.id === selectedNegotiation.id
+                        ? {
+                              ...item,
+                              supervisorObservation: observationText,
+                              hasNotes: true,
+                              notesCount: 1, // You might want to increment this if it was a counter
+                          }
+                        : item,
+                ),
+            );
+
+            setIsObservationModalOpen(false);
         } catch (error) {
             console.error('Error updating observation:', error);
             alert('Error al guardar la observación');
@@ -175,6 +202,14 @@ export default function DashboardTable({
     };
     const updateEffectiveness = async (id: number, value: string) => {
         if (readOnly) return;
+
+        if (value === 'Efectiva') {
+            setPendingEffectivenessId(id);
+            setNotaEntregaValue('');
+            setIsNotaEntregaModalOpen(true);
+            return;
+        }
+
         try {
             // Map string values to integers for the backend
             let effectiveInt = 0; // Pendiente
@@ -185,11 +220,56 @@ export default function DashboardTable({
                 efectividad: effectiveInt,
             });
 
-            // Reload the page to reflect changes (simplest approach for now)
-            window.location.reload();
+            // Update local state
+            setNegotiations((prev) =>
+                prev.map((item) =>
+                    item.id === id
+                        ? {
+                              ...item,
+                              effectiveness: value as
+                                  | 'Efectiva'
+                                  | 'No Efectiva'
+                                  | 'Pendiente',
+                          }
+                        : item,
+                ),
+            );
         } catch (error) {
             console.error('Error updating effectiveness:', error);
             alert('Error al actualizar la efectividad');
+        }
+    };
+
+    const confirmNotaEntrega = async () => {
+        if (!pendingEffectivenessId) return;
+
+        try {
+            await axios.patch(`/negociacion/${pendingEffectivenessId}`, {
+                efectividad: 1, // Efectiva
+                nota_entrega: notaEntregaValue,
+            });
+
+            // Update local state
+            setNegotiations((prev) =>
+                prev.map((item) =>
+                    item.id === pendingEffectivenessId
+                        ? {
+                              ...item,
+                              effectiveness: 'Efectiva',
+                              notaEntrega: notaEntregaValue,
+                          }
+                        : item,
+                ),
+            );
+
+            setIsNotaEntregaModalOpen(false);
+            setPendingEffectivenessId(null);
+        } catch (error) {
+            console.error(
+                'Error updating effectiveness with nota entrega:',
+                error,
+            );
+            alert('Error al guardar la nota de entrega');
         }
     };
 
@@ -300,6 +380,9 @@ export default function DashboardTable({
                                 <th className="max-w-[150px] px-4 py-3 text-left">
                                     Obs. Vendedor
                                 </th>
+                                <th className="px-4 py-3 text-left">
+                                    Nota Entrega
+                                </th>
                                 <th className="px-4 py-3 text-center">
                                     Efectividad
                                 </th>
@@ -309,7 +392,7 @@ export default function DashboardTable({
                             </tr>
                         </thead>
                         <tbody className="divide-y">
-                            {data.map((item) => (
+                            {negotiations.map((item) => (
                                 <tr
                                     key={item.id}
                                     className="bg-card transition-colors hover:bg-muted/40"
@@ -367,6 +450,11 @@ export default function DashboardTable({
                                         >
                                             {item.salesObservation}
                                         </div>
+                                    </td>
+                                    <td className="px-4 py-4 align-middle">
+                                        <span className="text-sm font-medium">
+                                            {item.notaEntrega || '-'}
+                                        </span>
                                     </td>
                                     <td className="px-4 py-4 text-center align-middle">
                                         <div className="flex justify-center">
@@ -516,6 +604,48 @@ export default function DashboardTable({
                             </Button>
                         </DialogFooter>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isNotaEntregaModalOpen}
+                onOpenChange={setIsNotaEntregaModalOpen}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Ingresar Nota de Entrega</DialogTitle>
+                        <DialogDescription>
+                            Para marcar como efectiva, ingrese el número de nota
+                            de entrega.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="notaEntrega">Nota de Entrega</Label>
+                            <Input
+                                id="notaEntrega"
+                                value={notaEntregaValue}
+                                onChange={(e) =>
+                                    setNotaEntregaValue(e.target.value)
+                                }
+                                placeholder="Ingrese el número..."
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsNotaEntregaModalOpen(false)}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={confirmNotaEntrega}
+                            disabled={!notaEntregaValue.trim()}
+                        >
+                            Guardar
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </Card>

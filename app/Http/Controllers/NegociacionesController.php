@@ -95,6 +95,7 @@ class NegociacionesController extends Controller
                     'hasNotes' => !empty($negociacion->observacion_supervisor),
                     'notesCount' => !empty($negociacion->observacion_supervisor) ? 1 : 0,
                     'supervisorObservation' => $negociacion->observacion_supervisor,
+                    'notaEntrega' => $negociacion->nota_entrega,
                 ];
             });
 
@@ -171,6 +172,7 @@ class NegociacionesController extends Controller
         $request->validate([
             'efectividad' => 'nullable|integer|in:0,1,2',
             'observacion_supervisor' => 'nullable|string',
+            'nota_entrega' => 'nullable|string',
         ]);
 
         $negociacion = Negociacion::findOrFail($id);
@@ -181,6 +183,10 @@ class NegociacionesController extends Controller
 
         if ($request->has('observacion_supervisor') && auth()->user()->isAdmin()) {
             $negociacion->observacion_supervisor = $request->observacion_supervisor;
+        }
+
+        if ($request->has('nota_entrega')) {
+            $negociacion->nota_entrega = $request->nota_entrega;
         }
 
         $negociacion->save();
