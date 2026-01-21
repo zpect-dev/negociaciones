@@ -8,9 +8,16 @@ use App\Models\Vendedor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Negociacion;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\NegociacionesExport;
     
 class NegociacionesController extends Controller
 {
+    public function export(Request $request) 
+    {
+        return Excel::download(new NegociacionesExport($request), 'negociaciones.xlsx');
+    }
+
     public function index(Request $request)
     {
         $readOnly = false;
@@ -36,7 +43,10 @@ class NegociacionesController extends Controller
             $query->where(function($q) use ($search) {
                 $q->where('bitrix_id', 'like', "%{$search}%")
                     ->orWhere('bitrix_name', 'like', "%{$search}%")
-                    ->orWhere('bitrix_far', 'like', "%{$search}%");
+                    ->orWhere('bitrix_far', 'like', "%{$search}%")
+                    ->orWhereHas('user', function($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -76,7 +86,9 @@ class NegociacionesController extends Controller
 
                 return [
                     'id' => $negociacion->id,
-                    'fecha' => $negociacion->created_at->translatedFormat('d M Y'),
+                    'fecha' => $negociacion->fecha_negociacion 
+                        ? $negociacion->fecha_negociacion->translatedFormat('d M Y') 
+                        : $negociacion->created_at->translatedFormat('d M Y'),
                     'bitrixId' => $negociacion->bitrix_id,
                     'companyName' => $negociacion->bitrix_name,
                     'companyTar' => $negociacion->bitrix_far,
@@ -87,7 +99,7 @@ class NegociacionesController extends Controller
                         'initials' => $initials,
                         'co_ven' => $negociacion->co_ven,
                     ],
-                    'salesObservation' => $negociacion->observacion,
+                    'salesObservation' => $this->observacion($negociacion->bitrix_far, $negociacion->fecha_negociacion),
                     'effectiveness' => $effectiveness,
                     'hasPdf' => !empty($negociacion->documento),
                     'pdfUrl' => !empty($negociacion->documento) ? asset('storage/negociaciones/' . $negociacion->documento) : null,
@@ -98,7 +110,7 @@ class NegociacionesController extends Controller
                     'notaEntrega' => $negociacion->nota_entrega,
                 ];
             });
-
+    
         return Inertia::render('dashboard', [
             'negotiations' => $negotiations,
             'readOnly' => $readOnly,
@@ -117,7 +129,7 @@ class NegociacionesController extends Controller
             'co_ven' => 'required',
             'tipo_negociacion' => 'required',
             'documento' => 'required|file|mimes:pdf',
-            'observacion' => 'nullable',
+            'fecha_negociacion' => 'nullable|date',
         ]);
 
         $fileName = null;
@@ -135,8 +147,8 @@ class NegociacionesController extends Controller
             'co_ven' => $validatedData['co_ven'],
             'tipo_negociacion' => $validatedData['tipo_negociacion'],
             'documento' => $fileName,
-            'observacion' => $validatedData['observacion'] ?? null,
             'user_id' => auth()->user()->id,
+            'fecha_negociacion' => $validatedData['fecha_negociacion'] ?? now(),
         ]);
 
         if($negociacion) {
@@ -155,16 +167,18 @@ class NegociacionesController extends Controller
         ]);
     }
 
-    public function observacion($far) {
-        $observacion = DB::connection('mysql-app')
+    public function observacion($far, $fecha) {
+        $observaciones = DB::connection('mysql-app')
             ->table('gestiones')
             ->select('venta_descripcion', 'cobranza_descripcion')
             ->where('co_cli', $far)
+            ->whereDate('fecha_registro', $fecha)
             ->orderBy('fecha_registro', 'desc')
             ->first();
-        return response()->json([
-            'observacion' => $observacion
-        ]);
+
+        $observacion = ($observaciones?->venta_descripcion ?? '') . ($observaciones?->cobranza_descripcion ?? '');
+        
+        return trim($observacion);
     }
 
     public function update(Request $request, $id)
@@ -192,5 +206,26 @@ class NegociacionesController extends Controller
         $negociacion->save();
 
         return response()->json(['message' => 'Negociación actualizada correctamente']);
+    }
+
+    public function destroy($id)
+    {
+        if (!auth()->check() || !auth()->user()->isAdmin()) {
+            return response()->json(['message' => 'No autorizado'], 403);
+        }
+
+        $negociacion = Negociacion::findOrFail($id);
+        
+        // Delete associated document if exists
+        if ($negociacion->documento) {
+            $filePath = storage_path('app/public/negociaciones/' . $negociacion->documento);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+        }
+
+        $negociacion->delete();
+
+        return response()->json(['message' => 'Negociación eliminada correctamente']);
     }
 }

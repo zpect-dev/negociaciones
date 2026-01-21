@@ -16,12 +16,14 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::get('dashboard', [NegociacionesController::class, 'index'])->name('dashboard');
+Route::get('negociaciones/export', [NegociacionesController::class, 'export'])->name('negociacion.export');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('vendedores', [NegociacionesController::class, 'create'])->name('vendedores');
     Route::get('observacion/{far}', [NegociacionesController::class, 'observacion'])->name('observacion');
     Route::post('negociacion', [NegociacionesController::class, 'store'])->name('negociacion.store');
     Route::patch('negociacion/{id}', [NegociacionesController::class, 'update'])->name('negociacion.update');
+    Route::delete('negociacion/{id}', [NegociacionesController::class, 'destroy'])->name('negociacion.destroy');
 });
 
 require __DIR__.'/settings.php';

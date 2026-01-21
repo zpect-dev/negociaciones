@@ -21,9 +21,14 @@ class Negociacion extends Model
         'co_ven',
         'efectividad',
         'observacion_supervisor',
+        'fecha_negociacion',
     ];
     public function user()
     {
         return $this->belongsTo(User::class);
     }
+
+    protected $casts = [
+        'fecha_negociacion' => 'date',
+    ];
 }

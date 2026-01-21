@@ -28,6 +28,7 @@ import {
     Hourglass,
     MessageSquare,
     Search,
+    Trash2,
     XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -86,6 +87,11 @@ export default function DashboardTable({
     const [pendingEffectivenessId, setPendingEffectivenessId] = useState<
         number | null
     >(null);
+
+    // Delete Modal State
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [negotiationToDelete, setNegotiationToDelete] =
+        useState<NegotiationRecord | null>(null);
 
     // Filter states
     const [search, setSearch] = useState(filters?.search || '');
@@ -273,6 +279,30 @@ export default function DashboardTable({
         }
     };
 
+    const openDeleteModal = (negotiation: NegotiationRecord) => {
+        setNegotiationToDelete(negotiation);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDeleteNegotiation = async () => {
+        if (!negotiationToDelete) return;
+
+        try {
+            await axios.delete(`/negociacion/${negotiationToDelete.id}`);
+
+            // Remove from local state
+            setNegotiations((prev) =>
+                prev.filter((item) => item.id !== negotiationToDelete.id),
+            );
+
+            setIsDeleteModalOpen(false);
+            setNegotiationToDelete(null);
+        } catch (error) {
+            console.error('Error deleting negotiation:', error);
+            alert('Error al eliminar la negociación');
+        }
+    };
+
     return (
         <Card className="border-0">
             <CardHeader className="pb-4">
@@ -286,7 +316,7 @@ export default function DashboardTable({
                     <div className="relative flex-1">
                         <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
-                            placeholder="Buscar por Compañía, ID Bitrix o Código FAR/Profit..."
+                            placeholder="Buscar por Compañía, ID Bitrix o Código FAR/Profit, Ejecutivo..."
                             className="pl-9"
                             value={search}
                             onChange={handleSearchChange}
@@ -354,6 +384,32 @@ export default function DashboardTable({
                                 </SelectContent>
                             </Select>
                         </div>
+                        {!getVenParam() && (
+                            <div className="col-span-2 flex items-end lg:col-span-1 lg:w-auto">
+                                <Button
+                                    variant="outline"
+                                    className="w-full gap-2 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                                    onClick={() => {
+                                        const params = cleanParams({
+                                            search,
+                                            date_from: dateFrom,
+                                            date_to: dateTo,
+                                            efectividad: effectiveness,
+                                            ven: getVenParam(),
+                                        });
+                                        const queryString = new URLSearchParams(
+                                            params as Record<string, string>,
+                                        ).toString();
+                                        window.location.href = `/negociaciones/export?${queryString}`;
+                                    }}
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    <span className="sr-only lg:not-sr-only">
+                                        Exportar
+                                    </span>
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </CardHeader>
@@ -389,6 +445,11 @@ export default function DashboardTable({
                                 <th className="px-4 py-3 text-right">
                                     Documento
                                 </th>
+                                {isAdmin && (
+                                    <th className="px-4 py-3 text-center">
+                                        Acciones
+                                    </th>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -547,15 +608,22 @@ export default function DashboardTable({
                                             >
                                                 <FileText className="h-4 w-4" />
                                             </Button>
-                                            {/* <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:bg-muted"
-                                            >
-                                                <History className="h-4 w-4" />
-                                            </Button> */}
                                         </div>
                                     </td>
+                                    {isAdmin && (
+                                        <td className="px-4 py-4 text-center align-middle">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                                                onClick={() =>
+                                                    openDeleteModal(item)
+                                                }
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -644,6 +712,35 @@ export default function DashboardTable({
                             disabled={!notaEntregaValue.trim()}
                         >
                             Guardar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isDeleteModalOpen}
+                onOpenChange={setIsDeleteModalOpen}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Eliminar Negociación</DialogTitle>
+                        <DialogDescription>
+                            ¿Está seguro que desea eliminar esta negociación?
+                            Esta acción no se puede deshacer.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsDeleteModalOpen(false)}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteNegotiation}
+                        >
+                            Eliminar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

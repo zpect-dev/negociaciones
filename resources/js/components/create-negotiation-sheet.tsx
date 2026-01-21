@@ -20,14 +20,7 @@ import {
 } from '@headlessui/react';
 import { router } from '@inertiajs/react';
 import { AxiosError } from 'axios';
-import {
-    Calendar,
-    Check,
-    ChevronsUpDown,
-    Loader2,
-    Search,
-    User,
-} from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Search, User } from 'lucide-react';
 import { useState } from 'react';
 
 export function CreateNegotiationSheet({
@@ -48,13 +41,14 @@ export function CreateNegotiationSheet({
     const [vendedores, setVendedores] = useState<
         { nombre: string; co_ven: string }[]
     >([]);
-    const [observacion, setObservacion] = useState<string | null>(null);
+    // const [observacion, setObservacion] = useState<string | null>(null);
     const [usuario, setUsuario] = useState<{ name: string } | null>(null);
     const [selectedVendedor, setSelectedVendedor] = useState<{
         nombre: string;
         co_ven: string;
     } | null>(null);
     const [negotiationType, setNegotiationType] = useState('');
+    const [negotiationDate, setNegotiationDate] = useState('');
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -97,7 +91,7 @@ export function CreateNegotiationSheet({
         setLoading(true);
         setError(null);
         setCompanyData(null);
-        setObservacion(null);
+        // setObservacion(null);
 
         try {
             const response = await fetch(
@@ -107,30 +101,30 @@ export function CreateNegotiationSheet({
 
             if (data.result && data.result.length > 0) {
                 const company = data.result[0];
-                let obsText: string | null = null;
+                // let obsText: string | null = null;
 
-                if (company.UF_CRM_1634787828) {
-                    try {
-                        // Internal call -> Use axios
-                        const obsResponse = await axios.get(
-                            `/observacion/${company.UF_CRM_1634787828}`,
-                        );
-                        const obsData = obsResponse.data;
-                        if (obsData) {
-                            obsText =
-                                obsData.observacion?.venta_descripcion ??
-                                '' +
-                                    (obsData.observacion
-                                        ?.cobranza_descripcion ?? '');
-                        }
-                    } catch (e) {
-                        console.error('Error fetching observation', e);
-                    }
-                }
+                // if (company.UF_CRM_1634787828) {
+                //     try {
+                //         // Internal call -> Use axios
+                //         const obsResponse = await axios.get(
+                //             `/observacion/${company.UF_CRM_1634787828}`,
+                //         );
+                //         const obsData = obsResponse.data;
+                //         if (obsData) {
+                //             obsText =
+                //                 obsData.observacion?.venta_descripcion ??
+                //                 '' +
+                //                     (obsData.observacion
+                //                         ?.cobranza_descripcion ?? '');
+                //         }
+                //     } catch (e) {
+                //         console.error('Error fetching observation', e);
+                //     }
+                // }
 
                 // Now set all data
                 setCompanyData(company);
-                setObservacion(obsText);
+                // setObservacion(obsText);
             } else {
                 setError('Compañía no encontrada');
             }
@@ -145,10 +139,11 @@ export function CreateNegotiationSheet({
         setCompanyId('');
         setCompanyData(null);
         setVendedores([]);
-        setObservacion(null);
+        // setObservacion(null);
         // setUsuario(null);
         setSelectedVendedor(null);
         setNegotiationType('');
+        setNegotiationDate('');
         setPdfFile(null);
         setQuery('');
         setError(null);
@@ -191,9 +186,13 @@ export function CreateNegotiationSheet({
             formData.append('documento', pdfFile);
         }
 
-        if (observacion) {
-            formData.append('observacion', observacion);
+        if (negotiationDate) {
+            formData.append('fecha_negociacion', negotiationDate);
         }
+
+        // if (observacion) {
+        //     formData.append('observacion', observacion);
+        // }
 
         try {
             // Axios automatically handles content-type for FormData
@@ -205,7 +204,8 @@ export function CreateNegotiationSheet({
                 preserveScroll: true,
                 preserveState: true,
             });
-        } catch {
+        } catch (e) {
+            console.error(e);
             setError('Error al guardar la negociación.');
         } finally {
             setLoading(false);
@@ -239,15 +239,27 @@ export function CreateNegotiationSheet({
                         <div className="flex items-center justify-around gap-4 rounded-lg border bg-muted/50 p-4">
                             <div className="space-y-1">
                                 <Label className="text-xs text-muted-foreground">
-                                    Fecha de Registro
+                                    Fecha de Negociación
                                 </Label>
-                                <div className="flex items-center gap-2 text-sm font-medium">
-                                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                                    {new Date().toLocaleDateString('es-ES', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                    })}
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        className="h-auto w-auto border-none p-0 text-sm font-medium shadow-none focus-visible:ring-0"
+                                        type="date"
+                                        min={
+                                            new Date()
+                                                .toISOString()
+                                                .split('T')[0]
+                                        }
+                                        value={
+                                            negotiationDate ||
+                                            new Date()
+                                                .toISOString()
+                                                .split('T')[0]
+                                        }
+                                        onChange={(e) =>
+                                            setNegotiationDate(e.target.value)
+                                        }
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-1">
@@ -306,12 +318,6 @@ export function CreateNegotiationSheet({
                                                 FAR:
                                             </span>{' '}
                                             {companyData.UF_CRM_1634787828}
-                                        </div>
-                                        <div className="col-span-2">
-                                            <span className="font-semibold">
-                                                Observación:
-                                            </span>{' '}
-                                            {observacion}
                                         </div>
                                     </div>
                                 </div>
